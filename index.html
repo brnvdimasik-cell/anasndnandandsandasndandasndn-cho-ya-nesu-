@@ -166,7 +166,7 @@ body.pc .tn:not(.fog):hover{transform:scale(1.12)}
 <div id="menu"><canvas id="mcv"></canvas><div id="mbox">
 <div id="ttl"><span class="a">Игла</span><span class="b">в стоге сена</span>
 <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet"><path d="M52 184 C8 220 -24 150 24 134 S86 124 64 96" stroke="#e4572e" stroke-width="3.5" fill="none" stroke-linecap="round"/><line x1="40" y1="190" x2="362" y2="46" stroke="#3b2f14" stroke-width="10" stroke-linecap="round"/><line x1="40" y1="190" x2="362" y2="46" stroke="#e8eef5" stroke-width="5.5" stroke-linecap="round"/><line x1="48" y1="184" x2="352" y2="48" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><ellipse cx="54" cy="184" rx="9" ry="3.6" transform="rotate(-24 54 184)" fill="#3b2f14"/></svg></div>
-<div id="mbtns"><button id="mCont">▶ Продолжить</button><button id="mNew">✨ Новая игра</button><button id="mMp">👥 Мультиплеер</button><button id="mSet">⚙️ Настройки</button><button id="mExit">🚪 Выйти</button></div>
+<div id="ver" style="font-size:11px;color:rgba(60,40,10,.6);text-align:center">версия 3 · связь MQTT + PeerJS</div><div id="mbtns"><button id="mCont">▶ Продолжить</button><button id="mNew">✨ Новая игра</button><button id="mMp">👥 Мультиплеер</button><button id="mSet">⚙️ Настройки</button><button id="mExit">🚪 Выйти</button></div>
 <div id="sets"><h2 style="margin:0;text-align:center">⚙️ Настройки</h2><label>🔊 Общая громкость<input type="range" id="sVol" min="0" max="100"></label><label>🎵 Музыка<input type="range" id="sMus" min="0" max="100"></label><button id="sDev">📱💻 Сменить устройство</button><button id="sCred">👥 Авторы</button><button id="sBack" style="background:#6b6a8a">← Назад</button></div>
 <div id="cred"><h2 style="margin:0">👥 Авторы</h2><div class="cr"><b>Dmitriy baranov</b><span>Главный разработчик, идея, геймплей</span></div><div class="cr"><b>konstantin pantelev</b><span>бета тестер, спонсор</span></div><div class="cr"><b>Alexander doshik</b><span>бета тестер, первый игрок, спонсор</span></div><small>игра сделана с помощью ИИ</small><button id="cBack" style="background:#6b6a8a">← Назад</button></div>
 <div id="mp"><h2 style="margin:0;text-align:center">👥 Мультиплеер</h2>
@@ -691,7 +691,7 @@ function mpLeave(){
  if(g){started=false;reset()}
 }
 function mpCreatePeer(){
- mpMsg("Подключаюсь через PeerJS…");
+ mpMsg(MP_ERR.length?"MQTT недоступен ("+MP_ERR.join(", ")+"). Пробую PeerJS…":"Подключаюсь через PeerJS…");
  loadPeer(ok=>{
   if(!ok)return mpMsg("Не загрузилась библиотека PeerJS. Нужен интернет и версия с GitHub Pages");
   const code=mkCode("JKMNPQRSTUVWXYZ");
@@ -724,6 +724,7 @@ function mpJoinPeer(code){
   });
  });
 }
+const MP_ERR=[];
 const BROKERS=["wss://broker.emqx.io:8084/mqtt","wss://broker.hivemq.com:8884/mqtt","wss://test.mosquitto.org:8081","wss://mqtt.eclipseprojects.io:443/mqtt"];
 function mkCode(f){const A="ABCDEFGHJKMNPQRSTUVWXYZ23456789";let c=f[Math.random()*f.length|0];for(let i=0;i<4;i++)c+=A[Math.random()*A.length|0];return c}
 function loadMqtt(cb){
@@ -732,11 +733,12 @@ function loadMqtt(cb){
  const t=()=>{if(i>=u.length)return cb(false);const e=document.createElement("script");e.src=u[i++];e.onload=()=>cb(!!window.mqtt);e.onerror=()=>{e.remove();t()};document.head.appendChild(e)};t();
 }
 function mqttConnect(opts,cb){
- let i=0;
+ let i=0;MP_ERR.length=0;
  const next=()=>{
   if(i>=BROKERS.length)return cb(null);
   const url=BROKERS[i++];let done=false,c;
-  const fail=()=>{if(done)return;done=true;try{c.end(true)}catch(e){}next()};
+  mpMsg("Пробую сервер "+i+" из "+BROKERS.length+"…");
+  const fail=()=>{if(done)return;done=true;MP_ERR.push(url.split("//")[1].split(":")[0]);try{c.end(true)}catch(e){}next()};
   try{c=mqtt.connect(url,Object.assign({reconnectPeriod:0,connectTimeout:6000,clean:true},opts))}catch(e){return next()}
   c.on("connect",()=>{if(done)return;done=true;cb(c)});
   c.on("error",fail);c.on("close",fail);setTimeout(fail,7000);
@@ -804,7 +806,7 @@ function mpJoin(code){
  loadMqtt(ok=>{
   if(!ok)return mpMsg("Не загрузилась библиотека связи (проверь интернет или VPN)");
   MP={on:true,host:false,guest:false,running:false,peer:null,mq:null,conns:[],conn:null,code,slot:0};
-  mqttGuest(code,good=>{if(!good){mpLeave();mpMsg("Не удалось достучаться до серверов связи");mpRender()}});
+  mqttGuest(code,good=>{if(!good){mpLeave();mpMsg("Серверы связи недоступны: "+MP_ERR.join(", "));mpRender()}});
  });
 }
 setInterval(()=>{
